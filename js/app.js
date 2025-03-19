@@ -1,62 +1,44 @@
 document.addEventListener("DOMContentLoaded", function () {
     const calendarDiv = document.getElementById("calendar");
-    const events = JSON.parse(localStorage.getItem("events")) || [];
+    const eventInput = document.getElementById("eventText");
+    const loginContainer = document.getElementById("login-container");
+    const calendarContainer = document.getElementById("calendar-container");
 
-    function renderCalendar() {
-        const today = new Date();
-        calendarDiv.innerHTML = `<h2>${today.toDateString()}</h2>`;
-        renderEvents();
-    }
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            loginContainer.style.display = "none";
+            calendarContainer.style.display = "block";
+            loadEvents(user.uid);
+        }
+    });
 
-    function renderEvents() {
-        calendarDiv.innerHTML += "<h3>Events:</h3>";
-        events.forEach(event => {
-            calendarDiv.innerHTML += `<p>${event}</p>`;
-        });
-
-        calendarDiv.innerHTML += `
-            <input type="text" id="eventText" placeholder="New Event">
-            <button onclick="addEvent()">Add Event</button>
-        `;
+    function loadEvents(userId) {
+        db.collection("events").where("userId", "==", userId)
+            .onSnapshot(snapshot => {
+                calendarDiv.innerHTML = "<h3>Events:</h3>";
+                snapshot.forEach(doc => {
+                    const event = doc.data();
+                    calendarDiv.innerHTML += `<p>${event.text} (Added: ${event.date})</p>`;
+                });
+            });
     }
 
     window.addEvent = function () {
-        const eventText = document.getElementById("eventText").value;
-        if (eventText) {
-            events.push(eventText);
-            localStorage.setItem("events", JSON.stringify(events));
-            renderCalendar();
+        const user = auth.currentUser;
+        if (!user) {
+            alert("Please log in first!");
+            return;
+        }
+
+        const text = eventInput.value;
+        if (text) {
+            db.collection("events").add({
+                userId: user.uid,
+                text: text,
+                date: new Date().toISOString()
+            }).then(() => {
+                eventInput.value = "";
+            });
         }
     };
-
-    renderCalendar();
-});
-
-if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("service-worker.js")
-        .then(() => console.log("Service Worker Registered"))
-        .catch(err => console.log("Service Worker Registration Failed", err));
-}
-
-let deferredPrompt;
-
-window.addEventListener("beforeinstallprompt", (event) => {
-    event.preventDefault(); // Prevent auto-prompt
-    deferredPrompt = event;
-
-    // Show the install button
-    const installBtn = document.getElementById("installBtn");
-    installBtn.style.display = "block";
-
-    installBtn.addEventListener("click", () => {
-        deferredPrompt.prompt();
-        deferredPrompt.userChoice.then(choiceResult => {
-            if (choiceResult.outcome === "accepted") {
-                console.log("User accepted the PWA install");
-            } else {
-                console.log("User dismissed the PWA install");
-            }
-            deferredPrompt = null;
-        });
-    });
 });
